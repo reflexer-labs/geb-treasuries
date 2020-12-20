@@ -21,7 +21,9 @@ abstract contract SAFEEngineLike {
     function approveSAFEModification(address) virtual external;
     function denySAFEModification(address) virtual external;
     function transferInternalCoins(address,address,uint256) virtual external;
+    function settleDebt(uint256) virtual external;
     function coinBalance(address) virtual public view returns (uint256);
+    function debtBalance(address) virtual public view returns (uint256);
 }
 abstract contract SystemCoinLike {
     function balanceOf(address) virtual public view returns (uint256);
@@ -89,6 +91,11 @@ contract SecondaryStabilityFeeTreasury {
         emit AddAuthorization(msg.sender);
     }
 
+    // --- Math ---
+    function minimum(uint256 x, uint256 y) internal view returns (uint256 z) {
+        z = (x <= y) ? x : y;
+    }
+
     // --- Helpers ---
     /**
      * @notice Join all ERC20 system coins that the treasury has inside SAFEEngine
@@ -96,6 +103,14 @@ contract SecondaryStabilityFeeTreasury {
     function joinAllCoins() internal {
         if (systemCoin.balanceOf(address(this)) > 0) {
           coinJoin.join(address(this), systemCoin.balanceOf(address(this)));
+        }
+    }
+    function settleDebt() public {
+        uint256 coinBalanceSelf = safeEngine.coinBalance(address(this));
+        uint256 debtBalanceSelf = safeEngine.debtBalance(address(this));
+
+        if (debtBalanceSelf > 0) {
+          safeEngine.settleDebt(minimum(coinBalanceSelf, debtBalanceSelf));
         }
     }
 
@@ -109,6 +124,9 @@ contract SecondaryStabilityFeeTreasury {
         require(account != address(0), "SecondaryStabilityFeeTreasury/null-account");
 
         joinAllCoins();
+        settleDebt();
+
+        require(safeEngine.debtBalance(address(this)) == 0, "SecondaryStabilityFeeTreasury/outstanding-bad-debt");
         require(safeEngine.coinBalance(address(this)) >= rad, "SecondaryStabilityFeeTreasury/not-enough-funds");
 
         safeEngine.transferInternalCoins(address(this), account, rad);

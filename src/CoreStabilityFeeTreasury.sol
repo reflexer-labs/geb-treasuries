@@ -21,7 +21,9 @@ abstract contract SAFEEngineLike {
     function approveSAFEModification(address) virtual external;
     function denySAFEModification(address) virtual external;
     function transferInternalCoins(address,address,uint256) virtual external;
+    function settleDebt(uint256) virtual external;
     function coinBalance(address) virtual public view returns (uint256);
+    function debtBalance(address) virtual public view returns (uint256);
 }
 abstract contract SystemCoinLike {
     function balanceOf(address) virtual public view returns (uint256);
@@ -150,6 +152,9 @@ contract CoreStabilityFeeTreasury {
         z = x / y;
         require(z <= x, "CoreStabilityFeeTreasury/div-invalid");
     }
+    function minimum(uint256 x, uint256 y) internal view returns (uint256 z) {
+        z = (x <= y) ? x : y;
+    }
 
     // --- Administration ---
     /**
@@ -213,6 +218,14 @@ contract CoreStabilityFeeTreasury {
           coinJoin.join(address(this), systemCoin.balanceOf(address(this)));
         }
     }
+    function settleDebt() public {
+        uint256 coinBalanceSelf = safeEngine.coinBalance(address(this));
+        uint256 debtBalanceSelf = safeEngine.debtBalance(address(this));
+
+        if (debtBalanceSelf > 0) {
+          safeEngine.settleDebt(minimum(coinBalanceSelf, debtBalanceSelf));
+        }
+    }
 
     // --- Getters ---
     function getAllowance(address account) public view returns (uint256, uint256) {
@@ -251,6 +264,9 @@ contract CoreStabilityFeeTreasury {
         require(account != address(0), "CoreStabilityFeeTreasury/null-account");
 
         joinAllCoins();
+        settleDebt();
+
+        require(safeEngine.debtBalance(address(this)) == 0, "CoreStabilityFeeTreasury/outstanding-bad-debt");
         require(safeEngine.coinBalance(address(this)) >= rad, "CoreStabilityFeeTreasury/not-enough-funds");
 
         if (account != accountingEngine) {
@@ -293,6 +309,9 @@ contract CoreStabilityFeeTreasury {
         pulledPerBlock[msg.sender][block.number] = addition(pulledPerBlock[msg.sender][block.number], multiply(wad, RAY));
 
         joinAllCoins();
+        settleDebt();
+
+        require(safeEngine.debtBalance(address(this)) == 0, "CoreStabilityFeeTreasury/outstanding-bad-debt");
         require(safeEngine.coinBalance(address(this)) >= multiply(wad, RAY), "CoreStabilityFeeTreasury/not-enough-funds");
 
         // Update allowance and accumulator
@@ -328,6 +347,10 @@ contract CoreStabilityFeeTreasury {
         latestSurplusTransferTime = now;
         // Join all coins in system
         joinAllCoins();
+        // Settle outstanding bad debt
+        settleDebt();
+        // Check that there's no bad debt left
+        require(safeEngine.debtBalance(address(this)) == 0, "CoreStabilityFeeTreasury/outstanding-bad-debt");
         // Check if we have too much money
         if (safeEngine.coinBalance(address(this)) > remainingFunds) {
           // Make sure that we still keep min SF in treasury
