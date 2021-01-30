@@ -98,7 +98,7 @@ contract CoreStabilityFeeTreasuryTest is DSTest {
     function test_setup() public {
         assertEq(stabilityFeeTreasury.surplusTransferDelay(), 0);
         assertEq(address(stabilityFeeTreasury.safeEngine()), address(safeEngine));
-        assertEq(address(stabilityFeeTreasury.accountingEngine()), alice);
+        assertEq(address(stabilityFeeTreasury.extraSurplusReceiver()), alice);
         assertEq(stabilityFeeTreasury.latestSurplusTransferTime(), now);
         assertEq(stabilityFeeTreasury.expensesMultiplier(), HUNDRED);
         assertEq(systemCoin.balanceOf(address(this)), 100 ether);
@@ -106,8 +106,8 @@ contract CoreStabilityFeeTreasuryTest is DSTest {
         assertEq(safeEngine.coinBalance(address(stabilityFeeTreasury)), rad(200 ether));
     }
     function test_modify_accounting_engine() public {
-        stabilityFeeTreasury.modifyParameters("accountingEngine", bob);
-        assertEq(stabilityFeeTreasury.accountingEngine(), bob);
+        stabilityFeeTreasury.modifyParameters("extraSurplusReceiver", bob);
+        assertEq(stabilityFeeTreasury.extraSurplusReceiver(), bob);
     }
     function test_modify_params() public {
         stabilityFeeTreasury.modifyParameters("expensesMultiplier", 5 * HUNDRED);
@@ -312,7 +312,7 @@ contract CoreStabilityFeeTreasuryTest is DSTest {
     }
     function test_transferSurplusFunds_after_expenses() public {
         address charlie = address(0x12345);
-        stabilityFeeTreasury.modifyParameters("accountingEngine", charlie);
+        stabilityFeeTreasury.modifyParameters("extraSurplusReceiver", charlie);
 
         stabilityFeeTreasury.modifyParameters("surplusTransferDelay", 10 minutes);
         stabilityFeeTreasury.giveFunds(alice, rad(40 ether));
@@ -329,7 +329,7 @@ contract CoreStabilityFeeTreasuryTest is DSTest {
     }
     function test_transferSurplusFunds_after_expenses_with_treasuryCapacity_and_minimumFundsRequired() public {
         address charlie = address(0x12345);
-        stabilityFeeTreasury.modifyParameters("accountingEngine", charlie);
+        stabilityFeeTreasury.modifyParameters("extraSurplusReceiver", charlie);
 
         stabilityFeeTreasury.modifyParameters("treasuryCapacity", rad(30 ether));
         stabilityFeeTreasury.modifyParameters("minimumFundsRequired", rad(10 ether));
@@ -348,7 +348,7 @@ contract CoreStabilityFeeTreasuryTest is DSTest {
     }
     function testFail_transferSurplusFunds_more_debt_than_coin() public {
         address charlie = address(0x12345);
-        stabilityFeeTreasury.modifyParameters("accountingEngine", charlie);
+        stabilityFeeTreasury.modifyParameters("extraSurplusReceiver", charlie);
 
         stabilityFeeTreasury.modifyParameters("treasuryCapacity", rad(30 ether));
         stabilityFeeTreasury.modifyParameters("minimumFundsRequired", rad(10 ether));
@@ -365,7 +365,7 @@ contract CoreStabilityFeeTreasuryTest is DSTest {
     }
     function test_transferSurplusFunds_less_debt_than_coin() public {
         address charlie = address(0x12345);
-        stabilityFeeTreasury.modifyParameters("accountingEngine", charlie);
+        stabilityFeeTreasury.modifyParameters("extraSurplusReceiver", charlie);
 
         stabilityFeeTreasury.modifyParameters("treasuryCapacity", rad(30 ether));
         stabilityFeeTreasury.modifyParameters("minimumFundsRequired", rad(10 ether));
