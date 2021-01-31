@@ -91,13 +91,14 @@ contract CoreStabilityFeeTreasury {
 
     address public extraSurplusReceiver;
 
-    uint256 public treasuryCapacity;           // max amount of SF that can be kept in treasury                        [rad]
-    uint256 public minimumFundsRequired;       // minimum amount of SF that must be kept in the treasury at all times  [rad]
-    uint256 public expensesMultiplier;         // multiplier for expenses                                              [hundred]
-    uint256 public surplusTransferDelay;       // minimum time between transferSurplusFunds calls                      [seconds]
-    uint256 public expensesAccumulator;        // expenses accumulator                                                 [rad]
-    uint256 public accumulatorTag;             // latest tagged accumulator price                                      [rad]
-    uint256 public latestSurplusTransferTime;  // latest timestamp when transferSurplusFunds was called                [seconds]
+    uint256 public treasuryCapacity;           // max amount of SF that can be kept in treasury                            [rad]
+    uint256 public minimumFundsRequired;       // minimum amount of SF that must be kept in the treasury at all times      [rad]
+    uint256 public expensesMultiplier;         // multiplier for expenses                                                  [hundred]
+    uint256 public surplusTransferDelay;       // minimum time between transferSurplusFunds calls                          [seconds]
+    uint256 public expensesAccumulator;        // expenses accumulator                                                     [rad]
+    uint256 public accumulatorTag;             // latest tagged accumulator price                                          [rad]
+    uint256 public pullFundsMinThreshold;      // minimum funds that must be in the treasury so that someone can pullFunds [rad]
+    uint256 public latestSurplusTransferTime;  // latest timestamp when transferSurplusFunds was called                    [seconds]
     uint256 public contractEnabled;
 
     modifier accountNotTreasury(address account) {
@@ -111,6 +112,7 @@ contract CoreStabilityFeeTreasury {
         address coinJoin_
     ) public {
         require(address(CoinJoinLike(coinJoin_).systemCoin()) != address(0), "CoreStabilityFeeTreasury/null-system-coin");
+        require(extraSurplusReceiver_ != address(0), "CoreStabilityFeeTreasury/null-surplus-receiver");
         authorizedAccounts[msg.sender] = 1;
         safeEngine                = SAFEEngineLike(safeEngine_);
         extraSurplusReceiver      = extraSurplusReceiver_;
@@ -166,7 +168,7 @@ contract CoreStabilityFeeTreasury {
         require(contractEnabled == 1, "CoreStabilityFeeTreasury/contract-not-enabled");
         require(addr != address(0), "CoreStabilityFeeTreasury/null-addr");
         if (parameter == "extraSurplusReceiver") {
-          require(addr != address(this), "CoreStabilityFeeTreasury/surplus-receiver-cannot-be-treasury");
+          require(addr != address(this), "CoreStabilityFeeTreasury/accounting-engine-cannot-be-treasury");
           extraSurplusReceiver = addr;
         }
         else revert("CoreStabilityFeeTreasury/modify-unrecognized-param");
@@ -187,6 +189,9 @@ contract CoreStabilityFeeTreasury {
         else if (parameter == "minimumFundsRequired") {
           require(val <= treasuryCapacity, "CoreStabilityFeeTreasury/min-funds-higher-than-capacity");
           minimumFundsRequired = val;
+        }
+        else if (parameter == "pullFundsMinThreshold") {
+          pullFundsMinThreshold = val;
         }
         else if (parameter == "surplusTransferDelay") surplusTransferDelay = val;
         else revert("CoreStabilityFeeTreasury/modify-unrecognized-param");
@@ -297,7 +302,7 @@ contract CoreStabilityFeeTreasury {
      */
     function pullFunds(address dstAccount, address token, uint256 wad) external {
         if (dstAccount == address(this)) return;
-	      require(allowance[msg.sender].total >= wad, "CoreStabilityFeeTreasury/not-allowed");
+        require(allowance[msg.sender].total >= wad, "CoreStabilityFeeTreasury/not-allowed");
         require(dstAccount != address(0), "CoreStabilityFeeTreasury/null-dst");
         require(dstAccount != extraSurplusReceiver, "CoreStabilityFeeTreasury/dst-cannot-be-accounting");
         require(wad > 0, "CoreStabilityFeeTreasury/null-transfer-amount");
@@ -313,6 +318,7 @@ contract CoreStabilityFeeTreasury {
 
         require(safeEngine.debtBalance(address(this)) == 0, "CoreStabilityFeeTreasury/outstanding-bad-debt");
         require(safeEngine.coinBalance(address(this)) >= multiply(wad, RAY), "CoreStabilityFeeTreasury/not-enough-funds");
+        require(safeEngine.coinBalance(address(this)) >= pullFundsMinThreshold, "CoreStabilityFeeTreasury/below-pullFunds-min-threshold");
 
         // Update allowance and accumulator
         allowance[msg.sender].total = subtract(allowance[msg.sender].total, multiply(wad, RAY));
@@ -326,7 +332,7 @@ contract CoreStabilityFeeTreasury {
 
     // --- Treasury Maintenance ---
     /**
-     * @notice Transfer surplus stability fees to the extra surplus receiver. This is here to make sure that the treasury
+     * @notice Transfer surplus stability fees to the surplus receiver. This is here to make sure that the treasury
                doesn't accumulate too many fees that it doesn't even need in order to pay for allowances. It ensures
                that there are enough funds left in the treasury to account for projected expenses (latest expenses multiplied
                by an expense multiplier)
