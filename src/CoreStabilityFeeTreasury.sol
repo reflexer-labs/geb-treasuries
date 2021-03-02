@@ -302,7 +302,7 @@ contract CoreStabilityFeeTreasury {
      */
     function pullFunds(address dstAccount, address token, uint256 wad) external {
         if (dstAccount == address(this)) return;
-        require(allowance[msg.sender].total >= wad, "CoreStabilityFeeTreasury/not-allowed");
+        require(allowance[msg.sender].total >= multiply(wad, RAY), "CoreStabilityFeeTreasury/not-allowed");
         require(dstAccount != address(0), "CoreStabilityFeeTreasury/null-dst");
         require(dstAccount != extraSurplusReceiver, "CoreStabilityFeeTreasury/dst-cannot-be-accounting");
         require(wad > 0, "CoreStabilityFeeTreasury/null-transfer-amount");
