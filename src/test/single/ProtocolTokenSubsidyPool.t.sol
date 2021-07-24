@@ -3,7 +3,7 @@ pragma solidity 0.6.7;
 import "ds-test/test.sol";
 import "ds-token/delegate.sol";
 
-import "../ProtocolTokenSubsidyPool.sol";
+import "../../single/ProtocolTokenSubsidyPool.sol";
 
 contract Guy {
     function doApprove(address token, address usr, uint256 amount) public {
